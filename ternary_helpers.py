@@ -1,8 +1,8 @@
 import math
 import matplotlib
 import sys
-if "animation" in sys.argv[1]:
-    matplotlib.use("Agg")
+# if "animation" in sys.argv[1]:
+#     matplotlib.use("Agg")
 from ternary import plotting
 from ternary import ternary_axes_subplot as ternary
 from celluloid import Camera
