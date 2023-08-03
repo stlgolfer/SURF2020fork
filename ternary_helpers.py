@@ -256,6 +256,8 @@ def error_function(check_point, measured_point):
     """
     A = measured_point[0]
     B = measured_point[1]
+    C = measured_point[2]
+
     fA = check_point[0] / sum(check_point)
     fB = check_point[1] / sum(check_point)
     mfA = measured_point[0] / sum(measured_point) 
@@ -265,11 +267,20 @@ def error_function(check_point, measured_point):
     sigAB = -1 * A  * B / math.pow(sum(measured_point), 3)
     rho = sigAB / (sigfA * sigfB)
     p1 = 1 / (2 * math.pi * sigfA * sigfB * math.sqrt(1 - rho * rho))
-    p3 = (fA - mfA) * (fA - mfA) / (sigfA * sigfA) + (fB - mfB) * (fB - mfB) / (sigfB * sigfB) - 2 * rho * (fA - mfA) * (fB - mfB) / (sigfA * sigfB)
+    #p3 = (fA - mfA) * (fA - mfA) / (sigfA * sigfA) + (fB - mfB) * (fB - mfB) / (sigfB * sigfB) - 2 * rho * (fA - mfA) * (fB - mfB) / (sigfA * sigfB)
+    p3 = check_point[0]
 
     p2 = math.exp(-.5 / (1 - rho * rho) * p3)
-    prob = p1 * p2 
-    return prob
+    prob = p1 * p2
+
+    # going to try alternative route
+    px = fA
+    py = fB
+
+
+    return ((A + B + C) ** 5 * math.exp(
+        -((A + B + C) ** 2) * (B * C * px ** 2 + A * (C * py ** 2 + B * (px + py) ** 2)) / (2 * A * B * C))) / (
+                A * B * C * math.pi)
 
 def error_function_phi_est(check_point, measured_point, Ndet):
     """
@@ -287,7 +298,7 @@ def error_function_phi_est(check_point, measured_point, Ndet):
     mfA = measured_point[0] / sum(measured_point)
     mfB = measured_point[1] / sum(measured_point)
 
-    sigfA = A*math.sqrt(Ndet[0])/Ndet[0] #math.sqrt(mfA * (1 - mfA) / sum(measured_point))
+    sigfA =  A*math.sqrt(Ndet[0])/Ndet[0] #math.sqrt(mfA * (1 - mfA) / sum(measured_point))
     sigfB = B*math.sqrt(Ndet[1])/Ndet[1] #math.sqrt(mfB * (1 - mfB) / sum(measured_point))
 
     sigAB = -1 * A * B / math.pow(sum(measured_point), 3)
