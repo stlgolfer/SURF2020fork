@@ -246,7 +246,7 @@ def shared_plotting_script(title, labels, ternary_points_events, raw_points_even
             plt.savefig(f"./out/plots/{title}.png", writer=writer)
         plt.show()
 
-def error_function(check_point, measured_point): 
+def error_function(check_point, measured_point, dt):
     """
     Parameters: 
     check_point: 3-tuple of index of point which is being considered. i + j + k = 100
@@ -254,33 +254,34 @@ def error_function(check_point, measured_point):
     Returns: 
     prob(check_point[0] / 100, check_point[1] / 100)
     """
+    ebin = 0.2e-3
+
     A = measured_point[0]
     B = measured_point[1]
     C = measured_point[2]
 
     fA = check_point[0] / sum(check_point)
     fB = check_point[1] / sum(check_point)
-    mfA = measured_point[0] / sum(measured_point) 
-    mfB = measured_point[1] / sum(measured_point)
-    sigfA = math.sqrt(mfA * (1 - mfA) / sum(measured_point))
-    sigfB = math.sqrt(mfB * (1 - mfB) / sum(measured_point))
-    sigAB = -1 * A  * B / math.pow(sum(measured_point), 3)
-    rho = sigAB / (sigfA * sigfB)
-    p1 = 1 / (2 * math.pi * sigfA * sigfB * math.sqrt(1 - rho * rho))
-    #p3 = (fA - mfA) * (fA - mfA) / (sigfA * sigfA) + (fB - mfB) * (fB - mfB) / (sigfB * sigfB) - 2 * rho * (fA - mfA) * (fB - mfB) / (sigfA * sigfB)
-    p3 = check_point[0]
-
-    p2 = math.exp(-.5 / (1 - rho * rho) * p3)
-    prob = p1 * p2
+    # mfA = measured_point[0] / sum(measured_point)
+    # mfB = measured_point[1] / sum(measured_point)
+    # sigfA = math.sqrt(mfA * (1 - mfA) / sum(measured_point))
+    # sigfB = math.sqrt(mfB * (1 - mfB) / sum(measured_point))
+    # sigAB = -1 * A  * B / math.pow(sum(measured_point), 3)
+    # rho = sigAB / (sigfA * sigfB)
+    # p1 = 1 / (2 * math.pi * sigfA * sigfB * math.sqrt(1 - rho * rho))
+    # #p3 = (fA - mfA) * (fA - mfA) / (sigfA * sigfA) + (fB - mfB) * (fB - mfB) / (sigfB * sigfB) - 2 * rho * (fA - mfA) * (fB - mfB) / (sigfA * sigfB)
+    # p3 = check_point[0]
+    #
+    # p2 = math.exp(-.5 / (1 - rho * rho) * p3)
+    # prob = p1 * p2
 
     # going to try alternative route
-    px = fA
+    px = fA # ah, so new pdf form has a change of variables to fraction form, so 'x' and 'y' are are actually the fractions
     py = fB
 
-
     return ((A + B + C) ** 5 * math.exp(
-        -((A + B + C) ** 2) * (B * C * px ** 2 + A * (C * py ** 2 + B * (px + py) ** 2)) / (2 * A * B * C))) / (
-                A * B * C * math.pi)
+        -((A + B + C) ** 2) * (B * C * px ** 2 + A * (C * py ** 2 + B * (px + py) ** 2)) / (2 * A * B * C*dt*ebin))) / (
+                A * B * C * math.pi*(ebin*dt)**2)
 
 def error_function_phi_est(check_point, measured_point, Ndet):
     """
@@ -311,13 +312,13 @@ def error_function_phi_est(check_point, measured_point, Ndet):
     prob = p1 * p2
     return prob
 
-def heatmap_shader(check_point, measured_point, shader): 
+def heatmap_shader(check_point, measured_point, dt, shader):
     """
     takes in the current point to check and the mean point. returns 1 if error functions is larger for 
     current point than measured point. returns 0 otherwise. 
     """
-    p1 = error_function(check_point, measured_point)
-    p2 = error_function(measured_point, measured_point) / math.pi
+    p1 = error_function(check_point, measured_point, dt)
+    p2 = error_function(measured_point, measured_point, dt) / math.pi
     if p1 > p2: return shader
     return 0
 
@@ -340,11 +341,11 @@ def get_closest_point_phi_est(check_point, ternary_points, raw_points):
     norm = [np.linalg.norm([a - b for a, b, in zip(check_point, i)]) for i in ternary_points]
     return raw_points[norm.index(min(norm))], norm.index(min(norm))
 
-def generate_heatmap_dict(raw_points, ternary_points, shader=1, scale=100): 
+def generate_heatmap_dict(raw_points, ternary_points, dts, shader=1, scale=100):
     d = dict()
     for (i, j, k) in simplex_iterator(scale):
-        mean = get_closest_point((i, j, k), ternary_points, raw_points)
-        d[(i, j, k)] = heatmap_shader((i,j,k), mean, shader)
+        mean, mean_index = get_closest_point_phi_est((i, j, k), ternary_points, raw_points)
+        d[(i, j, k)] = heatmap_shader((i,j,k), mean, dts[mean_index], shader)
     return d
 
 def generate_heatmap_dict_phi_est(phi_est_raw, phi_est_ternary, Ndet, shader=1, scale=100):
