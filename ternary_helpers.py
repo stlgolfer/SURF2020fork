@@ -1,4 +1,6 @@
 import math
+import warnings
+
 import matplotlib
 import sys
 # if "animation" in sys.argv[1]:
@@ -283,7 +285,7 @@ def error_function(check_point, measured_point, dt):
         -((A + B + C) ** 2) * (B * C * px ** 2 + A * (C * py ** 2 + B * (px + py) ** 2)) / (2 * A * B * C*dt*ebin))) / (
                 A * B * C * math.pi*(ebin*dt)**2)
 
-def error_function_phi_est(check_point, measured_point, Ndet):
+def error_function_phi_est(check_point, measured_point, Ndet, dt):
     """
     Parameters:
     check_point: 3-tuple of index of point which is being considered. i + j + k = 100
@@ -292,24 +294,46 @@ def error_function_phi_est(check_point, measured_point, Ndet):
     Returns:
     prob(check_point[0] / 100, check_point[1] / 100)
     """
-    A = measured_point[0]
-    B = measured_point[1]
-    fA = check_point[0] / sum(check_point)
-    fB = check_point[1] / sum(check_point)
-    mfA = measured_point[0] / sum(measured_point)
-    mfB = measured_point[1] / sum(measured_point)
+    x = measured_point[0]
+    y = measured_point[1]
+    z = measured_point[2]
+    A = Ndet[0]
+    B = Ndet[1]
+    C = Ndet[2]
+    warnings.warn("Phi est uncertainty cloud is assuming that the energy bin width for Ndet is 0.2e-3 GeV (0.2 MeV)")
+    dEv = 0.2e-3
+    px = check_point[0] / sum(check_point)
+    py = check_point[1] / sum(check_point)
 
-    sigfA =  A*math.sqrt(Ndet[0])/Ndet[0] #math.sqrt(mfA * (1 - mfA) / sum(measured_point))
-    sigfB = B*math.sqrt(Ndet[1])/Ndet[1] #math.sqrt(mfB * (1 - mfB) / sum(measured_point))
+    # mfA = measured_point[0] / sum(measured_point)
+    # mfB = measured_point[1] / sum(measured_point)
+    #
+    # sigfA =  A*math.sqrt(Ndet[0])/Ndet[0] #math.sqrt(mfA * (1 - mfA) / sum(measured_point))
+    # sigfB = B*math.sqrt(Ndet[1])/Ndet[1] #math.sqrt(mfB * (1 - mfB) / sum(measured_point))
+    #
+    # sigAB = -1 * A * B / math.pow(sum(measured_point), 3)
+    # rho = sigAB / (sigfA * sigfB)
+    # p1 = 1 / (2 * math.pi * sigfA * sigfB * math.sqrt(1 - rho * rho))
+    # p3 = (fA - mfA) * (fA - mfA) / (sigfA * sigfA) + (fB - mfB) * (fB - mfB) / (sigfB * sigfB) - 2 * rho * (
+    #             fA - mfA) * (fB - mfB) / (sigfA * sigfB)
+    #
+    # p2 = math.exp(-.5 / (1 - rho * rho) * p3)
+    # prob = p1 * p2
+    #TODO: remove dev=dt=1 assumption
+    # dEv = dt = 1
+    # honestly, the PDF is a messy expression, so it may easier to just compute the linear algebra version of this
+    sigfA = x**2 * (B*C*(y+z)**2+A*(C*y**2+B*z**2))/(A*B*C*dEv*dt*(x+y+z)**4)
+    sigfB = y**2*(B*C*x**2 + A*(B*z**2 + C*(x+z)**2))/(A*B*C*dEv*dt*(x+y+z)**4)
+    covariance_term = -x*y*(-A*B*z**2+A*C*y*(x+z)+B*C*x*(y+z))/(A*B*C*dEv*dt*(x+y+z)**4)
 
-    sigAB = -1 * A * B / math.pow(sum(measured_point), 3)
-    rho = sigAB / (sigfA * sigfB)
-    p1 = 1 / (2 * math.pi * sigfA * sigfB * math.sqrt(1 - rho * rho))
-    p3 = (fA - mfA) * (fA - mfA) / (sigfA * sigfA) + (fB - mfB) * (fB - mfB) / (sigfB * sigfB) - 2 * rho * (
-                fA - mfA) * (fB - mfB) / (sigfA * sigfB)
+    new_error_matrix = np.array([[sigfA,covariance_term],[covariance_term,sigfB]])
+    coords = np.array([px,py])
 
-    p2 = math.exp(-.5 / (1 - rho * rho) * p3)
-    prob = p1 * p2
+    ep1 = np.matmul(np.transpose(coords),np.linalg.inv(new_error_matrix))
+    ep2 = np.matmul(ep1,coords)
+    prob = 1/(2*math.pi)*1/(np.linalg.det(new_error_matrix)**0.5)*math.exp(ep2)
+    print(prob)
+    # (A*B*C)*(dEv*dt)**2 * math.exp(-(dEv*dt)*(x+y+z)**2 * (B*C*x*(px*y+py*(y+z))**2))
     return prob
 
 def heatmap_shader(check_point, measured_point, dt, shader):
@@ -322,13 +346,13 @@ def heatmap_shader(check_point, measured_point, dt, shader):
     if p1 > p2: return shader
     return 0
 
-def heatmap_shader_phi_est(check_point, measured_point, Ndet, shader):
+def heatmap_shader_phi_est(check_point, measured_point, Ndet, dt, shader):
     """
     takes in the current point to check and the mean point. returns 1 if error functions is larger for
     current point than measured point. returns 0 otherwise.
     """
-    p1 = error_function_phi_est(check_point, measured_point, Ndet)
-    p2 = error_function_phi_est(measured_point, measured_point, Ndet) / math.pi
+    p1 = error_function_phi_est(check_point, measured_point, Ndet, dt)
+    p2 = error_function_phi_est(measured_point, measured_point, Ndet, dt) / math.pi
     if p1 > p2: return shader
     return 0
 
@@ -348,7 +372,7 @@ def generate_heatmap_dict(raw_points, ternary_points, dts, shader=1, scale=100):
         d[(i, j, k)] = heatmap_shader((i,j,k), mean, dts[mean_index], shader)
     return d
 
-def generate_heatmap_dict_phi_est(phi_est_raw, phi_est_ternary, Ndet, shader=1, scale=100):
+def generate_heatmap_dict_phi_est(phi_est_raw, phi_est_ternary, Ndet, dts, shader=1, scale=100):
     '''
     Adapted from Rishi's original code. Goes through each ternary point, finds the nearest point in ternary space, then sees
     if that point is in the 68% CI
@@ -367,7 +391,7 @@ def generate_heatmap_dict_phi_est(phi_est_raw, phi_est_ternary, Ndet, shader=1, 
     d = dict()
     for (i, j, k) in simplex_iterator(scale):
         mean, mean_index = get_closest_point_phi_est((i, j, k), phi_est_ternary, phi_est_raw)
-        d[(i, j, k)] = heatmap_shader_phi_est((i,j,k), mean, Ndet[mean_index], shader)
+        d[(i, j, k)] = heatmap_shader_phi_est((i,j,k), mean, Ndet[mean_index], dts[mean_index], shader)
     return d
 
 def consolidate_heatmap_data(h1, h2): 
