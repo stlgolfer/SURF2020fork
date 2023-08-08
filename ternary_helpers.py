@@ -264,26 +264,27 @@ def error_function(check_point, measured_point, dt):
 
     fA = check_point[0] / sum(check_point)
     fB = check_point[1] / sum(check_point)
-    # mfA = measured_point[0] / sum(measured_point)
-    # mfB = measured_point[1] / sum(measured_point)
-    # sigfA = math.sqrt(mfA * (1 - mfA) / sum(measured_point))
-    # sigfB = math.sqrt(mfB * (1 - mfB) / sum(measured_point))
-    # sigAB = -1 * A  * B / math.pow(sum(measured_point), 3)
-    # rho = sigAB / (sigfA * sigfB)
-    # p1 = 1 / (2 * math.pi * sigfA * sigfB * math.sqrt(1 - rho * rho))
-    # #p3 = (fA - mfA) * (fA - mfA) / (sigfA * sigfA) + (fB - mfB) * (fB - mfB) / (sigfB * sigfB) - 2 * rho * (fA - mfA) * (fB - mfB) / (sigfA * sigfB)
-    # p3 = check_point[0]
-    #
-    # p2 = math.exp(-.5 / (1 - rho * rho) * p3)
+    mfA = measured_point[0] / sum(measured_point)
+    mfB = measured_point[1] / sum(measured_point)
+    sigfA = math.sqrt(mfA * (1 - mfA) / sum(measured_point))
+    sigfB = math.sqrt(mfB * (1 - mfB) / sum(measured_point))
+    sigAB = -1 * A  * B / math.pow(sum(measured_point), 3)
+    rho = sigAB / (sigfA * sigfB)
+    p1 = 1 / (2 * math.pi * sigfA * sigfB * math.sqrt(1 - rho * rho))
+    p3 = (fA - mfA) * (fA - mfA) / (sigfA * sigfA) + (fB - mfB) * (fB - mfB) / (sigfB * sigfB) - 2 * rho * (fA - mfA) * (fB - mfB) / (sigfA * sigfB)
+
+    p2 = math.exp(-.5 / (1 - rho * rho) * p3)
     # prob = p1 * p2
 
     # going to try alternative route
     px = fA # ah, so new pdf form has a change of variables to fraction form, so 'x' and 'y' are are actually the fractions
     py = fB
-
-    return ((A + B + C) ** 5 * math.exp(
+    prob = ((A + B + C) ** 5 * math.exp(
         -((A + B + C) ** 2) * (B * C * px ** 2 + A * (C * py ** 2 + B * (px + py) ** 2)) / (2 * A * B * C*dt*ebin))) / (
                 A * B * C * math.pi*(ebin*dt)**2)
+    if prob > 1:
+        print(prob/math.pi)
+    return prob
 
 def error_function_phi_est(check_point, measured_point, Ndet, dt):
     """
@@ -294,6 +295,7 @@ def error_function_phi_est(check_point, measured_point, Ndet, dt):
     Returns:
     prob(check_point[0] / 100, check_point[1] / 100)
     """
+    # print(dt)
     x = measured_point[0]
     y = measured_point[1]
     z = measured_point[2]
@@ -305,36 +307,42 @@ def error_function_phi_est(check_point, measured_point, Ndet, dt):
     px = check_point[0] / sum(check_point)
     py = check_point[1] / sum(check_point)
 
-    # mfA = measured_point[0] / sum(measured_point)
-    # mfB = measured_point[1] / sum(measured_point)
-    #
-    # sigfA =  A*math.sqrt(Ndet[0])/Ndet[0] #math.sqrt(mfA * (1 - mfA) / sum(measured_point))
-    # sigfB = B*math.sqrt(Ndet[1])/Ndet[1] #math.sqrt(mfB * (1 - mfB) / sum(measured_point))
-    #
-    # sigAB = -1 * A * B / math.pow(sum(measured_point), 3)
-    # rho = sigAB / (sigfA * sigfB)
-    # p1 = 1 / (2 * math.pi * sigfA * sigfB * math.sqrt(1 - rho * rho))
-    # p3 = (fA - mfA) * (fA - mfA) / (sigfA * sigfA) + (fB - mfB) * (fB - mfB) / (sigfB * sigfB) - 2 * rho * (
-    #             fA - mfA) * (fB - mfB) / (sigfA * sigfB)
-    #
-    # p2 = math.exp(-.5 / (1 - rho * rho) * p3)
-    # prob = p1 * p2
-    #TODO: remove dev=dt=1 assumption
-    # dEv = dt = 1
     # honestly, the PDF is a messy expression, so it may easier to just compute the linear algebra version of this
-    sigfA = x**2 * (B*C*(y+z)**2+A*(C*y**2+B*z**2))/(A*B*C*dEv*dt*(x+y+z)**4)
-    sigfB = y**2*(B*C*x**2 + A*(B*z**2 + C*(x+z)**2))/(A*B*C*dEv*dt*(x+y+z)**4)
-    covariance_term = -x*y*(-A*B*z**2+A*C*y*(x+z)+B*C*x*(y+z))/(A*B*C*dEv*dt*(x+y+z)**4)
+    # start with old error matrix
+    # T = np.array([[-x/(x+y+z)**2 + 1/(x+y+z), -x/(x+y+z)**2],[-y/(x+y+z)**2,-y/(x+y+z)**2+1/(x+y+z)]])
+    # old_error_matrix = np.array([[dEv * dt * x**2 / A,0],[0,dEv * dt*y**2 / B]])
 
-    new_error_matrix = np.array([[sigfA,covariance_term],[covariance_term,sigfB]])
-    coords = np.array([px,py])
+    # sigfA = x**2 * (B*C*(y+z)**2+A*(C*y**2+B*z**2))/(A*B*C*dEv*dt*(x+y+z)**4)
+    # sigfB = y**2*(B*C*x**2 + A*(B*z**2 + C*(x+z)**2))/(A*B*C*dEv*dt*(x+y+z)**4)
+    # covariance_term = -x*y*(-A*B*z**2+A*C*y*(x+z)+B*C*x*(y+z))/(A*B*C*dEv*dt*(x+y+z)**4)
 
-    ep1 = np.matmul(np.transpose(coords),np.linalg.inv(new_error_matrix))
-    ep2 = np.matmul(ep1,coords)
-    prob = 1/(2*math.pi)*1/(np.linalg.det(new_error_matrix)**0.5)*math.exp(ep2)
-    print(prob)
+    # new_error_matrix = np.multiply(old_error_matrix,T)
+    # new_error_matrix = np.multiply(np.transpose(T),new_error_matrix)
+    # covariance_term = -dEv*dt*x*y*(-(A*B*z**2)+A*C*y*(x+z)+B*C*x*(y+z))/(A*B*C*(x+y+z)**4)
+    # new_error_matrix = np.array(
+    #     [
+    #         [
+    #             dEv * dt * (x**2) *((B*C*(y+z)**2)+A*(C*(y**2)+B*(z**2)))/(A*B*C*(x+y+z)**4),
+    #             covariance_term
+    #         ],
+    #         [
+    #             covariance_term,
+    #             dEv * dt * (y**2) * (B*C*(x**2) + A*(B*(x**2) + C*(x+z)**2))/(A*B*C*(x+y+z)**4)
+    #         ]
+    #     ]
+    # )
+    # coords = np.array([px,py])
+    #
+    # ep1 = np.matmul(np.transpose(coords),np.linalg.inv(new_error_matrix))
+    # ep2 = np.matmul(ep1,coords)
+    # print(np.linalg.det(new_error_matrix))
+    # prob = 1/(2*math.pi)*1/(np.linalg.det(new_error_matrix)**0.5)*math.exp(ep2)
+
+    # let's try just putting into equation form
+    prob1 = (A*B*C*(x + y + z)**6*math.exp(-0.5*((x + y + z)**2*(B*C*x**2*(px*y + py*(y + z))**2 + A*(B*(py*x - px*y)**2*z**2 + C*y**2*(py*x + px*(x + z))**2)))/ \
+            ((A + B + C)*dEv*dt*x**2*y**2*z**2)))/((A + B + C)*dEv**2*dt**2*math.pi*x**2*y**2*z**2)
     # (A*B*C)*(dEv*dt)**2 * math.exp(-(dEv*dt)*(x+y+z)**2 * (B*C*x*(px*y+py*(y+z))**2))
-    return prob
+    return prob1
 
 def heatmap_shader(check_point, measured_point, dt, shader):
     """
