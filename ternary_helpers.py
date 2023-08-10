@@ -284,7 +284,7 @@ def error_function(check_point, measured_point):
     #     # print(prob/math.pi)
     return prob if prob < 1 else 1
 
-def error_function_phi_est(check_point, measured_point, Ndet):
+def error_function_phi_est(check_point, measured_point, Ndet, n):
     """
     Parameters:
     check_point: 3-tuple of index of point which is being considered. i + j + k = 100
@@ -307,9 +307,9 @@ def error_function_phi_est(check_point, measured_point, Ndet):
     # print(measured_point)
     mfA = measured_point[0] / sum(measured_point)
     mfB = measured_point[1] / sum(measured_point)
-    sigfA = math.sqrt((x ** 2 * (B * C * (y + z) ** 2 + A * (C * y ** 2 + B * z ** 2))) / (
+    sigfA = n*math.sqrt((x ** 2 * (B * C * (y + z) ** 2 + A * (C * y ** 2 + B * z ** 2))) / (
                 A * B * C * (x + y + z) ** 4))  # math.sqrt(mfA * (1 - mfA) / sum(measured_point))
-    sigfB = math.sqrt((y ** 2 * (B * C * x ** 2 + A * (B * z ** 2 + C * (x + z) ** 2))) / (
+    sigfB = n*math.sqrt((y ** 2 * (B * C * x ** 2 + A * (B * z ** 2 + C * (x + z) ** 2))) / (
                 A * B * C * (x + y + z) ** 4))  # math.sqrt(mfB * (1 - mfB) / sum(measured_point))
     sigAB = -((x * y * (-(A * B * z ** 2) + A * C * y * (x + z) + B * C * x * (y + z))) / (
                 A * B * C * (x + y + z) ** 4))
@@ -332,13 +332,13 @@ def heatmap_shader(check_point, measured_point, shader):
     if p1 > p2: return shader
     return 0
 
-def heatmap_shader_phi_est(check_point, measured_point, Ndet, shader):
+def heatmap_shader_phi_est(check_point, measured_point, Ndet, shader, n):
     """
     takes in the current point to check and the mean point. returns 1 if error functions is larger for
     current point than measured point. returns 0 otherwise.
     """
-    p1 = error_function_phi_est(check_point, measured_point, Ndet)
-    p2 = error_function_phi_est(measured_point, measured_point, Ndet) / math.pi
+    p1 = error_function_phi_est(check_point, measured_point, Ndet,n)
+    p2 = error_function_phi_est(measured_point, measured_point, Ndet,n) / math.pi
     if p1 > p2: return shader
     return 0
 
@@ -358,25 +358,7 @@ def generate_heatmap_dict(raw_points, ternary_points, shader=1, scale=100):
         d[(i, j, k)] = heatmap_shader((i,j,k), mean, shader)
     return d
 
-def generate_heatmap_dict_v2(raw_points, ternary_points, shader=1, scale=100, cl=0.68):
-    d = dict()
-    # so, instead of going through each point and finding the closest, we are going to iterate over all possible points
-    # for each mean value, which should give better clarity (at the expense of compute time)
-    for t_point_index, t_point in enumerate(ternary_points):
-        for (i, j, k) in simplex_iterator(scale):
-            # given Ndet, and a point in ternary space, what is the pdf there?
-            density = error_function((i,j,k),t_point)
-            # now, based on the density, is the point in the confidence level?
-            if density/math.pi <= cl:
-                d[(i,j,k)] = 1
-    # now, this means that not all points in the heatmap will necessarily be filled with 0 or 1, so might need to fix this
-    # so we need to iterate over all points and make sure each point has a value
-    for (i,j,k) in simplex_iterator(scale):
-        if (i,j,k) not in d:
-            d[(i,j,k)] = 0
-    return d
-
-def generate_heatmap_dict_phi_est(phi_est_raw, phi_est_ternary, Ndet, shader=1, scale=100):
+def generate_heatmap_dict_phi_est(phi_est_raw, phi_est_ternary, Ndet, shader=1, scale=100, sigma_mult=1):
     '''
     Adapted from Rishi's original code. Goes through each ternary point, finds the nearest point in ternary space, then sees
     if that point is in the 68% CI
@@ -395,7 +377,7 @@ def generate_heatmap_dict_phi_est(phi_est_raw, phi_est_ternary, Ndet, shader=1, 
     d = dict()
     for (i, j, k) in simplex_iterator(scale):
         mean, mean_index = get_closest_point_phi_est((i, j, k), phi_est_ternary, phi_est_raw)
-        d[(i, j, k)] = heatmap_shader_phi_est((i,j,k), mean, Ndet[mean_index], shader)
+        d[(i, j, k)] = heatmap_shader_phi_est((i,j,k), mean, Ndet[mean_index], shader, sigma_mult)
     return d
 
 def consolidate_heatmap_data(h1, h2): 
