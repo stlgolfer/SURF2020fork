@@ -259,6 +259,11 @@ def error_function(check_point, measured_point):
 
     A = measured_point[0]
     B = measured_point[1]
+
+    if A < 1 or B < 1:
+        warnings.warn("Fractional Ndet is being used to calculate uncertainty. Poor heatmaps may result")
+        # return 1
+
     C = measured_point[2]
     fA = check_point[0] / sum(check_point)
     fB = check_point[1] / sum(check_point)
@@ -275,9 +280,9 @@ def error_function(check_point, measured_point):
     prob = p1 * p2
     # prob = 1 if prob > 1 else prob
     # prob = ((A + B + C)**5*math.exp(-0.5*((A + B + C)**2*(B*C*px**2 + A*(C*py**2 + B*(px + py)**2)))/(A*B*C)))/(A*B*C*math.pi)
-    if prob > 1:
-        print(prob/math.pi)
-    return prob
+    # if prob > 1:
+    #     # print(prob/math.pi)
+    return prob if prob < 1 else 1
 
 def error_function_phi_est(check_point, measured_point, Ndet):
     """
@@ -346,11 +351,29 @@ def get_closest_point_phi_est(check_point, ternary_points, raw_points):
     norm = [np.linalg.norm([a - b for a, b, in zip(check_point, i)]) for i in ternary_points]
     return raw_points[norm.index(min(norm))], norm.index(min(norm))
 
-def generate_heatmap_dict(raw_points, ternary_points, dts, shader=1, scale=100):
+def generate_heatmap_dict(raw_points, ternary_points, shader=1, scale=100):
     d = dict()
     for (i, j, k) in simplex_iterator(scale):
         mean, mean_index = get_closest_point_phi_est((i, j, k), ternary_points, raw_points)
         d[(i, j, k)] = heatmap_shader((i,j,k), mean, shader)
+    return d
+
+def generate_heatmap_dict_v2(raw_points, ternary_points, shader=1, scale=100, cl=0.68):
+    d = dict()
+    # so, instead of going through each point and finding the closest, we are going to iterate over all possible points
+    # for each mean value, which should give better clarity (at the expense of compute time)
+    for t_point_index, t_point in enumerate(ternary_points):
+        for (i, j, k) in simplex_iterator(scale):
+            # given Ndet, and a point in ternary space, what is the pdf there?
+            density = error_function((i,j,k),t_point)
+            # now, based on the density, is the point in the confidence level?
+            if density/math.pi <= cl:
+                d[(i,j,k)] = 1
+    # now, this means that not all points in the heatmap will necessarily be filled with 0 or 1, so might need to fix this
+    # so we need to iterate over all points and make sure each point has a value
+    for (i,j,k) in simplex_iterator(scale):
+        if (i,j,k) not in d:
+            d[(i,j,k)] = 0
     return d
 
 def generate_heatmap_dict_phi_est(phi_est_raw, phi_est_ternary, Ndet, shader=1, scale=100):
